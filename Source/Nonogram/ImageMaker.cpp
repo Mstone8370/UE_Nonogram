@@ -77,7 +77,7 @@ bool UImageMaker::SaveInProgressImage(FString& Data, FString& FolderName, FStrin
 
     // Color table
     // 00 00 00 00 ~ FF FF FF 00
-    for (int ColorTable = 0; ColorTable < 256; ColorTable++)
+    for (int32 ColorTable = 0; ColorTable < 256; ColorTable++)
     {
         // 54 = Color table offset
         FileData[54 + ColorTable * 4 + 0] = ColorTable;  // B
@@ -86,8 +86,8 @@ bool UImageMaker::SaveInProgressImage(FString& Data, FString& FolderName, FStrin
     }
 
     // Pixel storage
-    int x = 0;
-    int y = 0;
+    int32 x = 0;
+    int32 y = 0;
 
     uint8 FilledColor = (uint8)Color;
     uint8 EmptyColor = 255;
@@ -107,10 +107,10 @@ bool UImageMaker::SaveInProgressImage(FString& Data, FString& FolderName, FStrin
         }
         else
         {
-            const int Length = UNonogramStatics::CharToNum(c);
-            for (int i = 0; i < Length; i++)
+            const int32 Length = UNonogramStatics::CharToNum(c);
+            for (int32 i = 0; i < Length; i++)
             {
-                int Offset = FileSize - ((y + 1) * HorizontalLength) + x;
+                int32 Offset = FileSize - ((y + 1) * HorizontalLength) + x;
                 FileData[Offset] = CurrentColor;
                 x++;
             }

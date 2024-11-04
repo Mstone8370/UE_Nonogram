@@ -3,105 +3,100 @@
 
 #include "PlayLogger.h"
 
-UPlayLogger::UPlayLogger() :
-    MaxSize(10),
-    CurrentSize(0)
+UPlayLogger::UPlayLogger()
+    : MaxSize(10)
+    , CurrentSize(0)
 {
-    Head = new FLogNode();
-    Tail = new FLogNode();
+    Head = MakeShared<FLogNode>();
+    Tail = MakeShared<FLogNode>();
     Current = Head;
 
     Head->NextNode = Tail;
     Tail->PrevNode = Head;
 }
 
-UPlayLogger::UPlayLogger(int32 Size) :
-    UPlayLogger()
-{
-    if (Size > 0)
-    {
-        MaxSize = Size;
-    }
-}
-
 void UPlayLogger::BeginDestroy()
 {
     Clear();
-    delete Head;
-    delete Tail;
-    Head = nullptr;
-    Tail = nullptr;
-    Current = nullptr;
+    Head.Reset();
+    Tail.Reset();
+    Current.Reset();
     
     Super::BeginDestroy();
 }
 
-void UPlayLogger::DeleteNodesAfter(FLogNode* Node)
+void UPlayLogger::DeleteNodesAfter(const TSharedPtr<FLogNode>& Node)
 {
-    if (Node == Tail)
+    if (!Node.IsValid() || Node == Tail)
     {
         return;
     }
 
-    FLogNode* It = Node->NextNode;
-    while (It != Tail)
+    TSharedPtr<FLogNode> It = Node->NextNode;
+    while (It.IsValid() && It != Tail)
     {
-        FLogNode* DelNode = It;
         It = It->NextNode;
-        delete DelNode;
-
         CurrentSize--;
     }
+    CurrentSize = FMath::Max(0, CurrentSize);
     Node->NextNode = Tail;
     Tail->PrevNode = Node;
 }
 
-void UPlayLogger::AddLog(FPlayLog* NewLog)
+void UPlayLogger::AddLog(TUniquePtr<FPlayLog> NewLog)
 {
     // Current 뒤의 모든 노드 제거
     DeleteNodesAfter(Current);
 
     // 새로운 노드 생성 후 Current 뒤에 추가
-    FLogNode* NewNode = new FLogNode(NewLog);
+    TSharedPtr<FLogNode> NewNode = MakeShared<FLogNode>(MoveTemp(NewLog));
     NewNode->PrevNode = Current;
     NewNode->NextNode = Current->NextNode;
 
-    Current->NextNode->PrevNode = NewNode;
+    if (Current->NextNode.IsValid())
+    {
+        Current->NextNode->PrevNode = NewNode;
+    }
     Current->NextNode = NewNode;
 
     Current = NewNode;
 
-    // 
+    // 크기 증가
     CurrentSize++;
     if (CurrentSize > MaxSize)
     {
         // 최대 로그 크기를 넘으면 가장 오래된 로그 제거
-        FLogNode* OldestNode = Head->NextNode;
-        Head->NextNode = OldestNode->NextNode;
-        OldestNode->NextNode->PrevNode = Head;
-        delete OldestNode;
+        TSharedPtr<FLogNode> OldestNode = Head->NextNode;
+        if (OldestNode.IsValid() && OldestNode != Tail)
+        {
+            Head->NextNode = OldestNode->NextNode;
+            if (OldestNode->NextNode.IsValid())
+            {
+                OldestNode->NextNode->PrevNode = Head;
+            }
+        }
 
         CurrentSize = MaxSize;
     }
 }
 
-FPlayLog* UPlayLogger::Undo()
+const FPlayLog* UPlayLogger::Undo()
 {
     if (CanUndo())
     {
-        FPlayLog* Ret = Current->Log;
-        Current = Current->PrevNode;
+        const FPlayLog* Ret = Current->Log.Get();
+        Current = Current->PrevNode.Pin();
         return Ret;
     }
     return nullptr;
 }
 
-FPlayLog* UPlayLogger::Redo()
+const FPlayLog* UPlayLogger::Redo()
 {
     if (CanRedo())
     {
         Current = Current->NextNode;
-        return Current->Log;
+        return Current->Log.Get();
     }
     return nullptr;
 }
@@ -132,8 +127,8 @@ FString UPlayLogger::ToString() const
     {
         Ret.Append(" // ");
 
-        FLogNode* It = Head->NextNode;
-        while (It != Tail)
+        TSharedPtr<FLogNode> It = Head->NextNode;
+        while (It.IsValid() && It != Tail)
         {
             if (It == Current)
             {

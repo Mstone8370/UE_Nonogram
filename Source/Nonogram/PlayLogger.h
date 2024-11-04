@@ -13,38 +13,40 @@
 
 struct FLogNode
 {
-    FPlayLog* Log;
-    FLogNode* PrevNode;
-    FLogNode* NextNode;
+    TUniquePtr<FPlayLog> Log;
+    TWeakPtr<FLogNode> PrevNode; // 순환 참조 방지 목적으로 Weak 포인터 사용
+    TSharedPtr<FLogNode> NextNode;
     
-    FLogNode() :
-        Log(nullptr),
-        PrevNode(nullptr),
-        NextNode(nullptr)
-    {
-    }
+    FLogNode()
+        : Log(nullptr)
+        , PrevNode(nullptr)
+        , NextNode(nullptr)
+    {}
 
-    FLogNode(FPlayLog* NewLog) :
-        FLogNode()
-    {
-        SetLog(NewLog);
-    }
+    explicit FLogNode(TUniquePtr<FPlayLog> NewLog)
+        : Log(MoveTemp(NewLog))
+        , PrevNode(nullptr)
+        , NextNode(nullptr)
+    {}
 
     ~FLogNode()
     {
-        if (Log)
+        if (Log.IsValid())
         {
             Log->Clear();
         }
-        PrevNode = nullptr;
-        NextNode = nullptr;
+        PrevNode.Reset();
+        NextNode.Reset();
     }
 
-    void SetLog(FPlayLog* NewLog)
+    void SetLog(TUniquePtr<FPlayLog> NewLog)
     {
-        delete Log;
-        Log = NewLog;
+        Log = MoveTemp(NewLog);
     }
+
+    // 복사 생성자와 복사 대입 연산자 삭제
+    FLogNode(const FLogNode&) = delete;
+    FLogNode& operator=(const FLogNode&) = delete;
 };
 
 UCLASS(BlueprintType, Blueprintable)
@@ -54,23 +56,22 @@ class NONOGRAM_API UPlayLogger : public UObject
 
 public:
     UPlayLogger();
-    UPlayLogger(int32 Size);
     virtual void BeginDestroy() override;
     
 private:
     int32 MaxSize;
     int32 CurrentSize;
-    FLogNode* Head;
-    FLogNode* Tail;
-    FLogNode* Current;
+    TSharedPtr<FLogNode> Head;
+    TSharedPtr<FLogNode> Tail;
+    TSharedPtr<FLogNode> Current;
 
-    void DeleteNodesAfter(FLogNode* Node);
+    void DeleteNodesAfter(const TSharedPtr<FLogNode>& Node);
 
 public:
-    void AddLog(FPlayLog* NewLog);
+    void AddLog(TUniquePtr<FPlayLog> NewLog);
 
-    FPlayLog* Undo();
-    FPlayLog* Redo();
+    const FPlayLog* Undo();
+    const FPlayLog* Redo();
 
     bool CanUndo() const;
     bool CanRedo() const;

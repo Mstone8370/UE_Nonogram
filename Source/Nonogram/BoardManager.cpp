@@ -681,7 +681,7 @@ void UBoardManager::ClickMultipleCells(TArray<FVector2D> CellLocs, EClickMode Cl
         StateChangedCells.Add(FVector2D(LocX, LocY));
     }
 
-    FPlayLog* PL = new FPlayLog();
+    TUniquePtr<FPlayLog> PL = MakeUnique<FPlayLog>();
     PL->From = PrevCellState;
     PL->To = TargetCellState;
     TSet<int32> Xs;
@@ -696,24 +696,24 @@ void UBoardManager::ClickMultipleCells(TArray<FVector2D> CellLocs, EClickMode Cl
     }
     if (Xs.Num() == 1)
     {
-        CheckCol(*(Xs.begin()), PL);
+        CheckCol(*(Xs.begin()), PL.Get());
         for (const auto& Y : Ys)
         {
-            CheckRow(Y, PL);
+            CheckRow(Y, PL.Get());
         }
     }
     else if (Ys.Num() == 1)
     {
-        CheckRow(*(Ys.begin()), PL);
+        CheckRow(*(Ys.begin()), PL.Get());
         for (const auto& X : Xs)
         {
-            CheckCol(X, PL);
+            CheckCol(X, PL.Get());
         }
     }
 
     if (Logger)
     {
-        Logger->AddLog(PL);
+        Logger->AddLog(MoveTemp(PL));
         UndoButtonEnableSianature.Broadcast(Logger->CanUndo());
         RedoButtonEnableSianature.Broadcast(Logger->CanRedo());
     }
@@ -780,7 +780,7 @@ bool UBoardManager::Undo()
     {
         if (Logger->CanUndo())
         {
-            FPlayLog* Log = Logger->Undo();
+            const FPlayLog* Log = Logger->Undo();
             if (Log && Log->From != ECellState::ECS_Invalid && Log->To != ECellState::ECS_Invalid)
             {
                 for (const FVector2D& CellLoc : Log->Cells)
@@ -818,7 +818,7 @@ bool UBoardManager::Redo()
     {
         if (Logger->CanRedo())
         {
-            FPlayLog* Log = Logger->Redo();
+            const FPlayLog* Log = Logger->Redo();
             if (Log && Log->From != ECellState::ECS_Invalid && Log->To != ECellState::ECS_Invalid)
             {
                 for (const FVector2D& CellLoc : Log->Cells)
@@ -878,324 +878,4 @@ bool UBoardManager::SaveInProgressImage(FString Data, FString FolderName, FStrin
     }
     
     return ImageMaker->SaveInProgressImage(Data, FolderName, BoardName, BoardRowSize, BoardColSize, Color);
-}
-
-
-/*
-* Deprecated Functions
-*/
-
-void UBoardManager::CheckBoard_Deprecated(int32 UpdatedCellX, int32 UpdatedCellY)
-{
-    FLineCheck RowCheck;
-    CheckRow_Deprecated(UpdatedCellY, RowCheck);
-    RowLineCheckUpdatedSignature.Broadcast(UpdatedCellY, RowCheck);
-    MatchCount -= BoardChecker.Rows[UpdatedCellY].MatchCount;
-    MatchCount += RowCheck.MatchCount;
-    BoardChecker.Rows[UpdatedCellY] = RowCheck;
-
-    FLineCheck ColCheck;
-    CheckCol_Deprecated(UpdatedCellX, ColCheck);
-    ColLineCheckUpdatedSignature.Broadcast(UpdatedCellX, ColCheck);
-    MatchCount -= BoardChecker.Cols[UpdatedCellX].MatchCount;
-    MatchCount += ColCheck.MatchCount;
-    BoardChecker.Cols[UpdatedCellX] = ColCheck;
-
-    // 
-    if (MatchCount == InfoCount)
-    {
-        // Game Clear
-        UE_LOG(LogTemp, Warning, TEXT("Done!!!!!!!!!!!!!"));
-        BoardClearedSignature.Broadcast();
-    }
-}
-
-void UBoardManager::CheckRow_Deprecated(int32 RowIndex, FLineCheck& OutLineCheck)
-{
-    OutLineCheck = FLineCheck();
-    FLineInfo& RowInfo = BoardInfo.Rows[RowIndex];
-    int32 InfoNum = RowInfo.Infos.Num();
-    for (int32 i = 0; i < InfoNum; i++)
-    {
-        OutLineCheck.MatchStates.Add(false);
-    }
-
-    TArray<FBlock> Blocks;
-    int32 Count = 0;
-    int32 CurrentBlockStart = 0;
-    bool bIsBlockConnected = true;
-    for (int32 i = 0; i <= ColSize; i++)
-    {
-        ECellState CurrentCellState = ECellState::ECS_Invalid;
-        if (i < ColSize)
-        {
-            CurrentCellState = Board[RowIndex][i].CellState;
-        }
-
-        if (CurrentCellState == ECellState::ECS_Filled || CurrentCellState == ECellState::ECS_NotSure)
-        {
-            if (Count == 0)
-            {
-                CurrentBlockStart = i;
-            }
-            Count++;
-        }
-        else
-        {
-            if (Count)
-            {
-                FBlock CurrentBlock;
-                CurrentBlock.StartIdx = CurrentBlockStart;
-                CurrentBlock.EndIdx = i - 1;
-                CurrentBlock.bIsConnected = bIsBlockConnected;
-                Blocks.Add(CurrentBlock);
-                Count = 0;
-            }
-            if (CurrentCellState == ECellState::ECS_Blank)
-            {
-                bIsBlockConnected = false;
-            }
-        }
-    }
-
-    if (Blocks.Num() > InfoNum || Blocks.Num() == 0)
-    {
-        return;
-    }
-    int32 BlockNum = -1;
-    if (Blocks.Num() < InfoNum)
-    {
-        // 역순 검사를 위해 block을 info 개수만큼 일단 뒤쪽에 채워넣음.
-        BlockNum = Blocks.Num();
-        while (Blocks.Num() != InfoNum)
-        {
-            FBlock Placeholder({ -1, -1, false });
-            Blocks.Add(Placeholder);
-        }
-
-        // 마지막에 찾은 Block이 연결되어있지 않다면 역순 검사를 위해 맨 뒤로 옮김. 끌올.
-        if (!Blocks[BlockNum - 1].bIsConnected)
-        {
-            Swap(Blocks[BlockNum - 1], Blocks[InfoNum - 1]);
-            BlockNum--;
-        }
-    }
-
-    // 뒤에서부터 연결된 블럭들 확인
-    int32 BlockIdx = InfoNum - 1;
-    int32 CellIdx = ColSize - 1;
-    while (CellIdx >= 0)
-    {
-        if (Blocks[BlockIdx].bIsConnected)
-        {
-            // 여기서부턴 이미 확인된 cell이므로 더이상 확인할 필요 없음.
-            break;
-        }
-
-        if (CellIdx <= Blocks[BlockIdx].EndIdx)
-        {
-            // 현재 볼 cell이 블럭에 포함되어있으면 블럭의 앞쪽으로 바로 이동.
-            CellIdx = Blocks[BlockIdx].StartIdx - 1;
-            // 이 블럭은 끝에 연결되어있음.
-            Blocks[BlockIdx].bIsConnected = true;
-            BlockIdx--;
-            if (BlockIdx < 0 || CellIdx < 0)
-            {
-                // 블럭을 모두 확인했거나 현재 볼 cell의 인덱스가 valid하지 않은 경우 루프 끝냄.
-                break;
-            }
-
-            // 다음으로 만날 블럭이 임시 블럭이고, 스왑할 대상 블럭이 연결되어있지 않다면 스왑.
-            bool bIsPlaceholderBlock = (Blocks[BlockIdx].StartIdx < 0 || Blocks[BlockIdx].EndIdx < 0);
-            if (bIsPlaceholderBlock && (BlockNum > 0 && !Blocks[BlockNum - 1].bIsConnected))
-            {
-                Swap(Blocks[BlockIdx], Blocks[BlockNum - 1]);
-                BlockNum--;
-            }
-        }
-
-        ECellState CurrentCellState = Board[RowIndex][CellIdx].CellState;
-        if (CurrentCellState == ECellState::ECS_Blank)
-        {
-            // 연결이 끊겼으므로 더이상 확인할 필요 없음.
-            break;
-        }
-        CellIdx--;
-    }
-
-    // 연결이 중간에 끊겨있어도 모든 info에 맞게 채워져있으면 모두 참으로 지정해야하므로 임시로 카운트.
-    int32 TempCount = 0;
-    for (int32 i = 0; i < Blocks.Num(); i++)
-    {
-        bool bIsPlaceholderBlock = (Blocks[i].StartIdx < 0 || Blocks[i].EndIdx < 0);
-        if (bIsPlaceholderBlock)
-        {
-            continue;
-        }
-
-        int32 BlockLength = Blocks[i].EndIdx - Blocks[i].StartIdx + 1;
-        if (RowInfo[i] == BlockLength)
-        {
-            if (Blocks[i].bIsConnected)
-            {
-                OutLineCheck.MatchStates[i] = true;
-                OutLineCheck.MatchCount++;
-            }
-            TempCount++;
-        }
-    }
-
-    if (TempCount == InfoNum)
-    {
-        for (int32 i = 0; i < InfoNum; i++)
-        {
-            OutLineCheck.MatchStates[i] = true;
-        }
-        OutLineCheck.MatchCount = InfoNum;
-    }
-}
-
-void UBoardManager::CheckCol_Deprecated(int32 ColIndex, FLineCheck& OutLineCheck)
-{
-    OutLineCheck = FLineCheck();
-    FLineInfo& ColInfo = BoardInfo.Cols[ColIndex];
-    int32 InfoNum = ColInfo.Infos.Num();
-    for (int32 i = 0; i < InfoNum; i++)
-    {
-        OutLineCheck.MatchStates.Add(false);
-    }
-
-    TArray<FBlock> Blocks;
-    int32 Count = 0;
-    int32 CurrentBlockStart = 0;
-    bool bIsBlockConnected = true;
-    for (int32 i = 0; i <= RowSize; i++)
-    {
-        ECellState CurrentCellState = ECellState::ECS_Invalid;
-        if (i < RowSize)
-        {
-            CurrentCellState = Board[i][ColIndex].CellState;
-        }
-
-        if (CurrentCellState == ECellState::ECS_Filled || CurrentCellState == ECellState::ECS_NotSure)
-        {
-            if (Count == 0)
-            {
-                CurrentBlockStart = i;
-            }
-            Count++;
-        }
-        else
-        {
-            if (Count)
-            {
-                FBlock CurrentBlock;
-                CurrentBlock.StartIdx = CurrentBlockStart;
-                CurrentBlock.EndIdx = i - 1;
-                CurrentBlock.bIsConnected = bIsBlockConnected;
-                Blocks.Add(CurrentBlock);
-                Count = 0;
-            }
-            if (CurrentCellState == ECellState::ECS_Blank)
-            {
-                bIsBlockConnected = false;
-            }
-        }
-    }
-
-    if (Blocks.Num() > InfoNum || Blocks.Num() == 0)
-    {
-        return;
-    }
-    int32 BlockNum = -1;
-    if (Blocks.Num() < InfoNum)
-    {
-        // 역순 검사를 위해 block을 info 개수만큼 일단 뒤쪽에 채워넣음.
-        BlockNum = Blocks.Num();
-        while (Blocks.Num() != InfoNum)
-        {
-            FBlock Placeholder({ -1, -1, false });
-            Blocks.Add(Placeholder);
-        }
-
-        // 마지막에 찾은 Block이 연결되어있지 않다면 역순 검사를 위해 맨 뒤로 옮김. 끌올.
-        if (!Blocks[BlockNum - 1].bIsConnected)
-        {
-            Swap(Blocks[BlockNum - 1], Blocks[InfoNum - 1]);
-            BlockNum--;
-        }
-    }
-
-    // 뒤에서부터 연결된 블럭들 확인
-    int32 BlockIdx = InfoNum - 1;
-    int32 CellIdx = RowSize - 1;
-    while (CellIdx >= 0)
-    {
-        if (Blocks[BlockIdx].bIsConnected)
-        {
-            // 여기서부턴 이미 확인된 cell이므로 더이상 확인할 필요 없음.
-            break;
-        }
-
-        if (CellIdx <= Blocks[BlockIdx].EndIdx)
-        {
-            // 현재 볼 cell이 블럭에 포함되어있으면 블럭의 앞쪽으로 바로 이동.
-            CellIdx = Blocks[BlockIdx].StartIdx - 1;
-            // 이 블럭은 끝에 연결되어있음.
-            Blocks[BlockIdx].bIsConnected = true;
-            BlockIdx--;
-            if (BlockIdx < 0 || CellIdx < 0)
-            {
-                // 블럭을 모두 확인했거나 현재 볼 cell의 인덱스가 valid하지 않은 경우 루프 끝냄.
-                break;
-            }
-
-            // 다음으로 만날 블럭이 임시 블럭이고, 스왑할 대상 블럭이 연결되어있지 않다면 스왑.
-            bool bIsPlaceholderBlock = (Blocks[BlockIdx].StartIdx < 0 || Blocks[BlockIdx].EndIdx < 0);
-            if (bIsPlaceholderBlock && (BlockNum > 0 && !Blocks[BlockNum - 1].bIsConnected))
-            {
-                Swap(Blocks[BlockIdx], Blocks[BlockNum - 1]);
-                BlockNum--;
-            }
-        }
-
-        ECellState CurrentCellState = Board[CellIdx][ColIndex].CellState;
-        if (CurrentCellState == ECellState::ECS_Blank)
-        {
-            // 연결이 끊겼으므로 더이상 확인할 필요 없음.
-            break;
-        }
-        CellIdx--;
-    }
-
-    // 연결이 중간에 끊겨있어도 모든 info에 맞게 채워져있으면 모두 참으로 지정해야하므로 임시로 카운트.
-    int32 TempCount = 0;
-    for (int32 i = 0; i < Blocks.Num(); i++)
-    {
-        bool bIsPlaceholderBlock = (Blocks[i].StartIdx < 0 || Blocks[i].EndIdx < 0);
-        if (bIsPlaceholderBlock)
-        {
-            continue;
-        }
-
-        int32 BlockLength = Blocks[i].EndIdx - Blocks[i].StartIdx + 1;
-        if (ColInfo[i] == BlockLength)
-        {
-            if (Blocks[i].bIsConnected)
-            {
-                OutLineCheck.MatchStates[i] = true;
-                OutLineCheck.MatchCount++;
-            }
-            TempCount++;
-        }
-    }
-
-    if (TempCount == InfoNum)
-    {
-        for (int32 i = 0; i < InfoNum; i++)
-        {
-            OutLineCheck.MatchStates[i] = true;
-        }
-        OutLineCheck.MatchCount = InfoNum;
-    }
 }

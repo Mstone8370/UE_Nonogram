@@ -82,12 +82,11 @@ protected:
 	void CheckBoard(int32 UpdatedCellX, int32 UpdatedCellY);
 	void GetBlocks(const TArray<ECellState>& LineState, TArray<FBlock>& OutBlocks) const;
 	bool LineMatch(const FLineInfo& LineInfo, const TArray<FBlock>& Blocks, FLineCheck& OutLineCheck) const;
+	
+
+	
 	void CheckRow(int32 RowIndex, FPlayLog* PlayLog = nullptr);
 	void CheckCol(int32 ColIndex, FPlayLog* PlayLog = nullptr);
-
-	void CheckBoard_Deprecated(int32 UpdatedCellX, int32 UpdatedCellY);
-	void CheckRow_Deprecated(int32 RowIndex, FLineCheck& OutLineCheck);
-	void CheckCol_Deprecated(int32 ColIndex, FLineCheck& OutLineCheck);
 
 public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite)
