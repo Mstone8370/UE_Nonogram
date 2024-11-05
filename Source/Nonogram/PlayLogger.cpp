@@ -6,11 +6,10 @@
 UPlayLogger::UPlayLogger()
     : MaxSize(10)
     , CurrentSize(0)
+    , Head(MakeShared<FLogNode>())
+    , Tail(MakeShared<FLogNode>())
+    , Current(Head)
 {
-    Head = MakeShared<FLogNode>();
-    Tail = MakeShared<FLogNode>();
-    Current = Head;
-
     Head->NextNode = Tail;
     Tail->PrevNode = Head;
 }
@@ -43,6 +42,22 @@ void UPlayLogger::DeleteNodesAfter(const TSharedPtr<FLogNode>& Node)
     Tail->PrevNode = Node;
 }
 
+bool UPlayLogger::PopFront()
+{
+    TSharedPtr<FLogNode> FrontNode = Head->NextNode;
+    if (FrontNode.IsValid() && FrontNode != Tail)
+    {
+        Head->NextNode = FrontNode->NextNode;
+        if (FrontNode->NextNode.IsValid())
+        {
+            FrontNode->NextNode->PrevNode = Head;
+        }
+        CurrentSize--;
+        return true;
+    }
+    return false;
+}
+
 void UPlayLogger::AddLog(TUniquePtr<FPlayLog> NewLog)
 {
     // Current 뒤의 모든 노드 제거
@@ -63,20 +78,13 @@ void UPlayLogger::AddLog(TUniquePtr<FPlayLog> NewLog)
 
     // 크기 증가
     CurrentSize++;
-    if (CurrentSize > MaxSize)
+    while (CurrentSize > MaxSize)
     {
         // 최대 로그 크기를 넘으면 가장 오래된 로그 제거
-        TSharedPtr<FLogNode> OldestNode = Head->NextNode;
-        if (OldestNode.IsValid() && OldestNode != Tail)
+        if (!PopFront())
         {
-            Head->NextNode = OldestNode->NextNode;
-            if (OldestNode->NextNode.IsValid())
-            {
-                OldestNode->NextNode->PrevNode = Head;
-            }
+            break;
         }
-
-        CurrentSize = MaxSize;
     }
 }
 

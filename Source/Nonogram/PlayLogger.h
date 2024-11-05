@@ -67,6 +67,8 @@ private:
 
     void DeleteNodesAfter(const TSharedPtr<FLogNode>& Node);
 
+    bool PopFront();
+
 public:
     void AddLog(TUniquePtr<FPlayLog> NewLog);
 
