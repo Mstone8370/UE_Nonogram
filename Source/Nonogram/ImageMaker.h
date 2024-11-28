@@ -32,10 +32,14 @@ private:
 
 	void CreateFolders();
 
-	void Write2Byte(uint16 Value, uint8* File, int32 Offset) const;
-	void Write4Byte(uint32 Value, uint8* File, int32 Offset) const;
+	// 마지막으로 작성한 오프셋의 다음 위치 리턴
+	template <typename T>
+	uint32 WriteBytes(T Value, uint8* File, uint32 Offset, uint32 ByteCount) const;
 
-	void DecodeAndFillPixelData(const FString& Data, uint8* FileData, int32 Color, uint32 FileSize, uint32 RowBytes) const;
+	uint32 Write2Bytes(uint16 Value, uint8* File, uint32 Offset) const;
+	uint32 Write4Bytes(uint32 Value, uint8* File, uint32 Offset) const;
+
+	void DecodeAndFillPixelData(const FString& Data, uint8* FileData, uint8 Color, uint32 FileSize, uint32 RowBytes) const;
 
 	static const uint32 FILE_HEADER_SIZE;
 	static const uint32 DIB_HEADER_SIZE;
@@ -47,5 +51,15 @@ private:
 	static const uint8  EMPTY_COLOR;
 
 public:
-	bool SaveInProgressImage(const FString& Data, const FString& FolderName, const FString& BoardName, int32 RowSize, int32 ColSize, int32 Color = 255) const;
+	bool SaveInProgressImage(const FString& Data, const FString& FolderName, const FString& BoardName, uint32 RowSize, uint32 ColSize, uint8 Color = 255) const;
 };
+
+template <typename T>
+uint32 UImageMaker::WriteBytes(T Value, uint8* File, uint32 Offset, uint32 ByteCount) const
+{
+	for (uint32 i = 0; i < ByteCount; ++i)
+	{
+		File[Offset + i] = static_cast<uint8>((Value >> (8 * i)) & 0xFF);
+	}
+	return Offset + ByteCount;
+}

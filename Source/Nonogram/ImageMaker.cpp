@@ -33,21 +33,18 @@ void UImageMaker::CreateFolders()
     bIsInProgressDirValid = FileManager.CreateDirectory(*InProgressDir);
 }
 
-void UImageMaker::Write2Byte(uint16 Value, uint8* File, int32 Offset) const
+uint32 UImageMaker::Write2Bytes(uint16 Value, uint8* File, uint32 Offset) const
 {
-    File[Offset] = static_cast<uint8>(Value);
-    File[Offset + 1] = static_cast<uint8>(Value >> 8);
+    return WriteBytes(Value, File, Offset, 2);
 }
 
-void UImageMaker::Write4Byte(uint32 Value, uint8* File, int32 Offset) const
+uint32 UImageMaker::Write4Bytes(uint32 Value, uint8* File, uint32 Offset) const
 {
-    Write2Byte(static_cast<uint16>(Value), File, Offset);
-    Write2Byte(static_cast<uint16>(Value >> 16), File, Offset + 2);
+    return WriteBytes(Value, File, Offset, 4);
 }
 
-void UImageMaker::DecodeAndFillPixelData(const FString& Data, uint8* FileData, int32 Color, uint32 FileSize, uint32 RowBytes) const
+void UImageMaker::DecodeAndFillPixelData(const FString& Data, uint8* FileData, uint8 Color, uint32 FileSize, uint32 RowBytes) const
 {
-    const uint8 FilledColor = (uint8)Color;
     uint8 CurrentColor = EMPTY_COLOR;
 
     int32 x = 0;
@@ -63,7 +60,7 @@ void UImageMaker::DecodeAndFillPixelData(const FString& Data, uint8* FileData, i
 
         if ('0' <= c && c < '4')
         {
-            CurrentColor = (c == '1') ? FilledColor : EMPTY_COLOR;
+            CurrentColor = (c == '1') ? Color : EMPTY_COLOR;
         }
         else
         {
@@ -79,7 +76,7 @@ void UImageMaker::DecodeAndFillPixelData(const FString& Data, uint8* FileData, i
     }
 }
 
-bool UImageMaker::SaveInProgressImage(const FString& Data, const FString& FolderName, const FString& BoardName, int32 RowSize, int32 ColSize, int32 Color) const
+bool UImageMaker::SaveInProgressImage(const FString& Data, const FString& FolderName, const FString& BoardName, uint32 RowSize, uint32 ColSize, uint8 Color) const
 {
     // 파일 시스템 접근을 위한 파일 매니저
     IPlatformFile& FileManager = FPlatformFileManager::Get().GetPlatformFile();
@@ -106,15 +103,18 @@ bool UImageMaker::SaveInProgressImage(const FString& Data, const FString& Folder
     // Bitmap file header
     FileData[0] = 'B';
     FileData[1] = 'M';
-    Write4Byte(FileSize, FileData.Get(), FILE_SIZE_OFFSET);           // File size
-    Write4Byte(PixelStorageOffset, FileData.Get(), OFF_BITS_OFFSET);  // Pixel storage offset
+    Write4Bytes(FileSize, FileData.Get(), FILE_SIZE_OFFSET);           // File size
+    Write4Bytes(PixelStorageOffset, FileData.Get(), OFF_BITS_OFFSET);  // Pixel storage offset
 
     // DIB header
-    Write4Byte(DIB_HEADER_SIZE, FileData.Get(), FILE_HEADER_SIZE);                  // DIB header size
-    Write4Byte(Width,           FileData.Get(), FILE_HEADER_SIZE + (4 * 1));        // Width
-    Write4Byte(Height,          FileData.Get(), FILE_HEADER_SIZE + (4 * 2));        // Hegith
-    Write2Byte(COLOR_PLANE,     FileData.Get(), FILE_HEADER_SIZE + (4 * 3));        // 1 color plane
-    Write2Byte(COLOR_DEPTH,     FileData.Get(), FILE_HEADER_SIZE + (4 * 3) + 2);    // 8 bit color
+    {
+        uint32 CurrentOffset = FILE_HEADER_SIZE;
+        CurrentOffset = Write4Bytes(DIB_HEADER_SIZE, FileData.Get(), CurrentOffset);    // DIB header size
+        CurrentOffset = Write4Bytes(Width, FileData.Get(), CurrentOffset);              // Width
+        CurrentOffset = Write4Bytes(Height, FileData.Get(), CurrentOffset);             // Hegith
+        CurrentOffset = Write2Bytes(COLOR_PLANE, FileData.Get(), CurrentOffset);        // 1 color plane
+        CurrentOffset = Write2Bytes(COLOR_DEPTH, FileData.Get(), CurrentOffset);        // 8 bit color
+    }
 
     // Color table
     // 00 00 00 00 ~ FF FF FF 00 (Gray Scale)
