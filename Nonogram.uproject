@@ -30,10 +30,6 @@
 			"Enabled": true
 		},
 		{
-			"Name": "OpenCV",
-			"Enabled": true
-		},
-		{
 			"Name": "BlueprintFileUtils",
 			"Enabled": true
 		},
@@ -52,6 +48,7 @@
 	],
 	"TargetPlatforms": [
 		"Android",
-		"Windows"
+		"Windows",
+		"HoloLens"
 	]
 }
